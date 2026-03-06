@@ -18,8 +18,8 @@ fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Comman
     cmd.stdin(Stdio::null()); // Prevent I/O errors when no console is attached
     #[cfg(target_os = "windows")]
     {
-        // DETACHED_PROCESS (0x08)
-        cmd.creation_flags(0x00000008);
+        // CREATE_NO_WINDOW (0x08000000)
+        cmd.creation_flags(0x08000000);
     }
     cmd
 }
@@ -32,7 +32,7 @@ fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> tokio::process
     cmd.stdin(Stdio::null());
     #[cfg(target_os = "windows")]
     {
-        cmd.creation_flags(0x00000008);
+        cmd.creation_flags(0x08000000);
     }
     cmd
 }
