@@ -550,11 +550,34 @@ async fn check_ffmpeg(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn update_ytdlp() -> Result<String, String> {
+async fn update_ytdlp(app: AppHandle) -> Result<String, String> {
+    let ytdlp = get_ytdlp_path(&app).ok_or("yt-dlp not found")?;
+
+    let ytdlp_clone = ytdlp.clone();
+    let output = tokio::task::spawn_blocking(move || {
+        std::process::Command::new(&ytdlp_clone)
+            .arg("-U")
+            .output()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if output.status.success() {
+        let msg = format!("{}\n{}", stdout, stderr).trim().to_string();
+        if !msg.is_empty() {
+            return Ok(msg);
+        }
+        return Ok("yt-dlp updated successfully".to_string());
+    }
+
     let python = if cfg!(windows) { "python" } else { "python3" };
 
-    // First try with --break-system-packages for newer Linux distributions
-    let output = tokio::task::spawn_blocking(move || {
+    // Fallback: try with --break-system-packages for newer Linux distributions or global python installs
+    let pip_output = tokio::task::spawn_blocking(move || {
         std::process::Command::new(python)
             .args([
                 "-m",
@@ -567,25 +590,18 @@ async fn update_ytdlp() -> Result<String, String> {
             ])
             .output()
     })
-    .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())?;
+    .await;
 
-    if output.status.success() {
-        return Ok("yt-dlp updated successfully".to_string());
+    if let Ok(Ok(out)) = pip_output {
+        if out.status.success() {
+            return Ok("yt-dlp updated successfully via pip".to_string());
+        }
     }
 
-    // Fallback if the flag is not supported (e.g. older python versions)
-    let output_fallback = std::process::Command::new(python)
-        .args(["-m", "pip", "install", "-U", "yt-dlp[curl-cffi]", "--user"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if output_fallback.status.success() {
-        Ok("yt-dlp updated successfully (fallback)".to_string())
-    } else {
-        Err(String::from_utf8_lossy(&output_fallback.stderr).to_string())
-    }
+    Err(format!(
+        "{}\n(If you are on Windows, try running the app as Administrator to update the bundled version)",
+        stderr
+    ))
 }
 
 #[tauri::command]
