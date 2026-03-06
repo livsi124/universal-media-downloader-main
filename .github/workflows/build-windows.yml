@@ -1,12 +1,12 @@
 name: Build Release Windows (EXE)
 
 on:
-  # Этот Action срабатывает, когда вы отправляете код на GitHub 
+  # Этот Action срабатывает, когда вы отправляете код на GitHub
   # Чтобы запустить ручную сборку, нужно будет нажать "Run workflow" во вкладке Actions
   workflow_dispatch:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
@@ -31,8 +31,9 @@ jobs:
         shell: pwsh
         working-directory: tauri-app
         run: |
-          mkdir -p assets/bin
-          cd assets/bin
+          if (Test-Path "assets/bin") { Remove-Item -Recurse -Force "assets/bin" }
+          New-Item -ItemType Directory -Path "assets/bin" -Force | Out-Null
+          Set-Location "assets/bin"
           # Загрузка yt-dlp
           Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "yt-dlp.exe"
           # Загрузка Deno
@@ -57,7 +58,7 @@ jobs:
         with:
           projectPath: ./tauri-app
           tagName: v__VERSION__ # Автоматически возьмет версию из tauri.conf.json
-          releaseName: 'Установщик v__VERSION__ для Windows'
-          releaseBody: 'Автоматическая сборка для Windows (.exe и .msi) с помощью GitHub Actions.'
+          releaseName: "Установщик v__VERSION__ для Windows"
+          releaseBody: "Автоматическая сборка для Windows (.exe и .msi) с помощью GitHub Actions."
           releaseDraft: false
           prerelease: false
