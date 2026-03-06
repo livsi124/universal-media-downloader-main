@@ -96,10 +96,18 @@ impl AppState {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn get_ytdlp_path() -> Option<String> {
-    // Check common locations
+fn get_ytdlp_path(app: &AppHandle) -> Option<String> {
     let mut candidates = vec![];
 
+    // Priority 1: Check bundled assets
+    if let Ok(resource_path) = app.path().resource_dir() {
+        let bundled = resource_path.join("assets").join("bin").join(if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" });
+        if bundled.exists() {
+            return Some(bundled.to_string_lossy().to_string());
+        }
+    }
+
+    // Check common locations
     if let Some(home) = dirs_next::home_dir() {
         candidates.push(home.join(".local/bin/yt-dlp").to_string_lossy().to_string());
         candidates.push(
@@ -131,7 +139,7 @@ fn get_ytdlp_path() -> Option<String> {
 
 fn get_ffmpeg_path(app: &AppHandle) -> Option<String> {
     let resource_path = app.path().resource_dir().ok()?;
-    let ffmpeg_bin = resource_path.join("assets").join("ffmpeg").join("bin");
+    let ffmpeg_bin = resource_path.join("assets").join("bin");
     let ffmpeg_exe = if cfg!(windows) {
         ffmpeg_bin.join("ffmpeg.exe")
     } else {
@@ -140,6 +148,13 @@ fn get_ffmpeg_path(app: &AppHandle) -> Option<String> {
     if ffmpeg_exe.exists() {
         return Some(ffmpeg_exe.to_string_lossy().to_string());
     }
+    
+    // Also check old location for compatibility
+    let old_ffmpeg = resource_path.join("assets").join("ffmpeg").join("bin").join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
+    if old_ffmpeg.exists() {
+        return Some(old_ffmpeg.to_string_lossy().to_string());
+    }
+    
     // Fallback to system ffmpeg
     if std::process::Command::new("ffmpeg")
         .arg("-version")
@@ -223,7 +238,7 @@ async fn fetch_video_info(
 ) -> Result<VideoInfo, String> {
     let normalized = normalize_url(&url);
     let ytdlp =
-        get_ytdlp_path().ok_or_else(|| "yt-dlp not found. Please install it.".to_string())?;
+        get_ytdlp_path(&app).ok_or_else(|| "yt-dlp not found. Please install it.".to_string())?;
 
     let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
 
@@ -303,7 +318,7 @@ async fn start_download(
     format: String,
 ) -> Result<(), String> {
     let normalized = normalize_url(&url);
-    let ytdlp = get_ytdlp_path().ok_or_else(|| "yt-dlp not found".to_string())?;
+    let ytdlp = get_ytdlp_path(&app).ok_or_else(|| "yt-dlp not found".to_string())?;
     let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
 
     let save_path = match &settings.save_path {
@@ -504,8 +519,8 @@ async fn stop_download(state: State<'_, AppState>, task_id: String) -> Result<()
 }
 
 #[tauri::command]
-async fn check_ytdlp() -> Result<String, String> {
-    let ytdlp = get_ytdlp_path();
+async fn check_ytdlp(app: AppHandle) -> Result<String, String> {
+    let ytdlp = get_ytdlp_path(&app);
     match ytdlp {
         Some(path) => {
             let output = std::process::Command::new(&path)
@@ -574,9 +589,9 @@ async fn update_ytdlp() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn check_ytdlp_update() -> Result<serde_json::Value, String> {
+async fn check_ytdlp_update(app: AppHandle) -> Result<serde_json::Value, String> {
     // Get current version
-    let ytdlp = get_ytdlp_path().ok_or("yt-dlp not found")?;
+    let ytdlp = get_ytdlp_path(&app).ok_or("yt-dlp not found")?;
     let output = std::process::Command::new(&ytdlp)
         .arg("--version")
         .output()

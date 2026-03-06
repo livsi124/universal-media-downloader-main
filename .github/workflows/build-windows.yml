@@ -27,6 +27,25 @@ jobs:
       - name: Установка Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Загрузка зависимостей (yt-dlp, deno, ffmpeg)
+        shell: pwsh
+        working-directory: tauri-app
+        run: |
+          mkdir -p assets/bin
+          cd assets/bin
+          # Загрузка yt-dlp
+          Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "yt-dlp.exe"
+          # Загрузка Deno
+          Invoke-WebRequest -Uri "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip" -OutFile "deno.zip"
+          Expand-Archive -Path "deno.zip" -DestinationPath "." -Force
+          Remove-Item "deno.zip"
+          # Загрузка FFmpeg
+          Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile "ffmpeg.zip"
+          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg-temp" -Force
+          Move-Item -Path "ffmpeg-temp\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe" -Destination "ffmpeg.exe" -Force
+          Remove-Item -Recurse -Force "ffmpeg-temp"
+          Remove-Item "ffmpeg.zip"
+
       - name: Установка NPM зависимостей
         working-directory: tauri-app
         run: npm install
