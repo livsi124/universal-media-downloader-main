@@ -9,7 +9,7 @@ A modern, fast, and feature-rich media downloader built with Tauri v2, Vue 3, an
 
 ## From Python to Tauri + Rust
 
-> The original PyQt6 version can be found here: [Magerko/universal-media-downloader](https://github.com/Magerko/universal-media-downloader) (Original Author: Magerko)
+> The original PyQt6 version can be found here: [Magerko/universal-media-downloader](https://github.com/Magerko/universal-media-downloader) (Original Author: @Magerko)
 
 Historically, this application was built using Python and PyQt6. While functional, it had limitations in UI polish, performance overhead, and distribution size. 
 

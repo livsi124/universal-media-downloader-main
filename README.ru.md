@@ -9,7 +9,7 @@
 
 ## От Python к Tauri + Rust
 
-> Оригинальная версия на PyQt6 находится по ссылке: [Magerko/universal-media-downloader](https://github.com/Magerko/universal-media-downloader) (Оригинальный автор: Magerko)
+> Оригинальная версия на PyQt6 находится по ссылке: [Magerko/universal-media-downloader](https://github.com/Magerko/universal-media-downloader) (Оригинальный автор: @Magerko)
 
 Исторически это приложение было написано на Python с использованием PyQt6. Хотя оно работало, оно имело ограничения в плане визуального оформления (UI), производительности и размера дистрибутива.
 
