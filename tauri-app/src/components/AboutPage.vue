@@ -37,6 +37,9 @@
             {{ updating ? '...' : t('update_now') }}
           </button>
         </div>
+      <div class="settings-row">
+        <span class="settings-label">Diagnostics</span>
+        <button class="btn btn-secondary" style="font-size:12px; height:28px; padding:0 10px;" @click="showDiagnostics">Show Paths</button>
       </div>
     </div>
   </div>
@@ -94,4 +97,13 @@ onMounted(async () => {
   try { ffmpegVersion.value = await invoke('check_ffmpeg') } catch (_) { ffmpegVersion.value = 'Not found' }
   try { denoInstalled.value = await invoke('check_deno') } catch (_) {}
 })
+
+async function showDiagnostics() {
+  try {
+    const deps = await invoke('debug_deps')
+    alert(deps)
+  } catch (err) {
+    alert('Failed to get diagnostics: ' + err)
+  }
+}
 </script>
