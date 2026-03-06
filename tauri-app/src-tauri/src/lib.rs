@@ -7,6 +7,27 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[allow(unused_mut)]
+fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000);
+    cmd
+}
+
+#[allow(unused_mut)]
+fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(program);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000);
+    cmd
+}
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoInfo {
     pub id: String,
@@ -123,7 +144,7 @@ fn get_ytdlp_path(app: &AppHandle) -> Option<String> {
     ]);
 
     for c in &candidates {
-        if std::process::Command::new(c)
+        if create_command(c)
             .arg("--version")
             .output()
             .map(|o| o.status.success())
@@ -154,7 +175,7 @@ fn get_ffmpeg_path(app: &AppHandle) -> Option<String> {
     }
     
     // Fallback to system ffmpeg
-    if std::process::Command::new("ffmpeg")
+    if create_command("ffmpeg")
         .arg("-version")
         .output()
         .map(|o| o.status.success())
@@ -253,7 +274,7 @@ async fn fetch_video_info(
         },
     );
 
-    let mut cmd = std::process::Command::new(&ytdlp);
+    let mut cmd = create_command(&ytdlp);
     cmd.args(["--dump-json", "--no-playlist", "--quiet", "--no-warnings"]);
 
     // Add cookies if configured
@@ -443,7 +464,7 @@ async fn run_download(
 
     args.push(url.clone());
 
-    let mut child = tokio::process::Command::new(&ytdlp)
+    let mut child = create_tokio_command(&ytdlp)
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -520,7 +541,7 @@ async fn check_ytdlp(app: AppHandle) -> Result<String, String> {
     let ytdlp = get_ytdlp_path(&app);
     match ytdlp {
         Some(path) => {
-            let output = std::process::Command::new(&path)
+            let output = create_command(&path)
                 .arg("--version")
                 .output()
                 .map_err(|e| e.to_string())?;
@@ -534,7 +555,7 @@ async fn check_ytdlp(app: AppHandle) -> Result<String, String> {
 async fn check_ffmpeg(app: AppHandle) -> Result<String, String> {
     match get_ffmpeg_path(&app) {
         Some(path) => {
-            let output = std::process::Command::new(&path)
+            let output = create_command(&path)
                 .arg("-version")
                 .output()
                 .map_err(|e| e.to_string())?;
@@ -552,7 +573,7 @@ async fn update_ytdlp(app: AppHandle) -> Result<String, String> {
 
     let ytdlp_clone = ytdlp.clone();
     let output = tokio::task::spawn_blocking(move || {
-        std::process::Command::new(&ytdlp_clone)
+        create_command(&ytdlp_clone)
             .arg("-U")
             .output()
     })
@@ -575,7 +596,7 @@ async fn update_ytdlp(app: AppHandle) -> Result<String, String> {
 
     // Fallback: try with --break-system-packages for newer Linux distributions or global python installs
     let pip_output = tokio::task::spawn_blocking(move || {
-        std::process::Command::new(python)
+        create_command(python)
             .args([
                 "-m",
                 "pip",
@@ -605,7 +626,7 @@ async fn update_ytdlp(app: AppHandle) -> Result<String, String> {
 async fn check_ytdlp_update(app: AppHandle) -> Result<serde_json::Value, String> {
     // Get current version
     let ytdlp = get_ytdlp_path(&app).ok_or("yt-dlp not found")?;
-    let output = std::process::Command::new(&ytdlp)
+    let output = create_command(&ytdlp)
         .arg("--version")
         .output()
         .map_err(|e| e.to_string())?;
@@ -648,7 +669,7 @@ async fn check_deno(app: AppHandle) -> Result<bool, String> {
     }
 
     // Check system deno
-    if std::process::Command::new("deno")
+    if create_command("deno")
         .arg("--version")
         .output()
         .map(|o| o.status.success())
@@ -660,7 +681,7 @@ async fn check_deno(app: AppHandle) -> Result<bool, String> {
     // Check ~/.deno/bin/deno
     if let Some(home) = dirs_next::home_dir() {
         let deno_path = home.join(".deno/bin/deno");
-        if std::process::Command::new(&deno_path)
+        if create_command(&deno_path)
             .arg("--version")
             .output()
             .map(|o| o.status.success())
@@ -683,7 +704,7 @@ async fn open_folder(path: String) -> Result<(), String> {
         "xdg-open"
     };
 
-    std::process::Command::new(cmd)
+    create_command(cmd)
         .arg(&path)
         .spawn()
         .map(|_| ())
@@ -700,7 +721,7 @@ async fn open_file(path: String) -> Result<(), String> {
         "xdg-open"
     };
 
-    std::process::Command::new(cmd)
+    create_command(cmd)
         .arg(&path)
         .spawn()
         .map(|_| ())
@@ -802,7 +823,7 @@ async fn detect_browsers() -> Result<Vec<String>, String> {
 
     for (name, commands) in &browsers {
         for cmd in commands {
-            if std::process::Command::new("which")
+            if create_command("which")
                 .arg(cmd)
                 .output()
                 .map(|o| o.status.success())
