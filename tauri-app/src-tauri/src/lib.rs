@@ -15,10 +15,10 @@ fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Comman
     let mut cmd = std::process::Command::new(program);
     cmd.env("PYTHONUTF8", "1");
     cmd.env("PYTHONIOENCODING", "utf-8");
+    cmd.stdin(Stdio::null()); // Prevent I/O errors when no console is attached
     #[cfg(target_os = "windows")]
     {
-        // DETACHED_PROCESS (0x08) hides console AND keeps valid I/O handles for Python
-        // CREATE_NO_WINDOW (0x08000000) breaks Python's TextIOWrapper
+        // DETACHED_PROCESS (0x08)
         cmd.creation_flags(0x00000008);
     }
     cmd
@@ -29,6 +29,7 @@ fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> tokio::process
     let mut cmd = tokio::process::Command::new(program);
     cmd.env("PYTHONUTF8", "1");
     cmd.env("PYTHONIOENCODING", "utf-8");
+    cmd.stdin(Stdio::null());
     #[cfg(target_os = "windows")]
     {
         cmd.creation_flags(0x00000008);
@@ -285,7 +286,14 @@ async fn fetch_video_info(
     );
 
     let mut cmd = create_command(&ytdlp);
-    cmd.args(["--dump-json", "--no-playlist", "--quiet", "--no-warnings"]);
+    cmd.args([
+        "--dump-json", 
+        "--no-playlist", 
+        "--quiet", 
+        "--no-warnings", 
+        "--windows-filenames", 
+        "--encoding", "utf-8"
+    ]);
 
     // Add cookies if configured
     if settings.use_cookies {
