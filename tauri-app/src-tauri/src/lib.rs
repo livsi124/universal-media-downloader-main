@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -78,7 +78,6 @@ impl Default for Settings {
 
 pub struct AppState {
     settings: Mutex<Settings>,
-    active_processes: Mutex<HashMap<String, std::sync::Arc<Mutex<Option<u32>>>>>,
     history_path: Mutex<Option<PathBuf>>,
     settings_path: Mutex<Option<PathBuf>>,
 }
@@ -87,7 +86,6 @@ impl AppState {
     fn new() -> Self {
         AppState {
             settings: Mutex::new(Settings::default()),
-            active_processes: Mutex::new(HashMap::new()),
             history_path: Mutex::new(None),
             settings_path: Mutex::new(None),
         }
@@ -456,7 +454,7 @@ async fn run_download(
     use tokio::io::AsyncBufReadExt;
     if let Some(stdout) = child.stdout.take() {
         let mut reader = tokio::io::BufReader::new(stdout).lines();
-        let mut final_path: Option<String> = None;
+        let mut _final_path: Option<String> = None;
 
         while let Ok(Some(line)) = reader.next_line().await {
             // Parse yt-dlp progress lines like:
@@ -493,7 +491,7 @@ async fn run_download(
                 // Try to extract file path
                 if let Some(idx) = line.find("Destination:") {
                     let path = line[idx + 12..].trim().to_string();
-                    final_path = Some(path);
+                    _final_path = Some(path);
                 }
             }
         }
@@ -512,9 +510,8 @@ async fn run_download(
 }
 
 #[tauri::command]
-async fn stop_download(state: State<'_, AppState>, task_id: String) -> Result<(), String> {
+async fn stop_download(_state: State<'_, AppState>, _task_id: String) -> Result<(), String> {
     // Signal to stop (for future implementation with process tracking)
-    let _ = task_id;
     Ok(())
 }
 
@@ -641,8 +638,16 @@ async fn check_ytdlp_update(app: AppHandle) -> Result<serde_json::Value, String>
 }
 
 #[tauri::command]
-async fn check_deno() -> Result<bool, String> {
-    // Check system deno first
+async fn check_deno(app: AppHandle) -> Result<bool, String> {
+    // Priority 1: Check bundled assets
+    if let Ok(resource_path) = app.path().resource_dir() {
+        let bundled = resource_path.join("assets").join("bin").join(if cfg!(windows) { "deno.exe" } else { "deno" });
+        if bundled.exists() {
+            return Ok(true);
+        }
+    }
+
+    // Check system deno
     if std::process::Command::new("deno")
         .arg("--version")
         .output()
@@ -824,7 +829,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(state)
         .setup(|app| {
             // Initialize paths
