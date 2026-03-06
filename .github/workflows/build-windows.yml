@@ -1,0 +1,44 @@
+name: Build Release Windows (EXE)
+
+on:
+  # Этот Action срабатывает, когда вы отправляете код на GitHub 
+  # Чтобы запустить ручную сборку, нужно будет нажать "Run workflow" во вкладке Actions
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Скачивание кода репозитория
+        uses: actions/checkout@v4
+
+      - name: Установка Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Установка Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Установка NPM зависимостей
+        working-directory: tauri-app
+        run: npm install
+
+      - name: Сборка и публикация релиза Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./tauri-app
+          tagName: v__VERSION__ # Автоматически возьмет версию из tauri.conf.json
+          releaseName: 'Установщик v__VERSION__ для Windows'
+          releaseBody: 'Автоматическая сборка для Windows (.exe и .msi) с помощью GitHub Actions.'
+          releaseDraft: false
+          prerelease: false
