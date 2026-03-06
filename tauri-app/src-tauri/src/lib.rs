@@ -13,12 +13,14 @@ use std::os::windows::process::CommandExt;
 #[allow(unused_mut)]
 fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
-    // Force Python UTF-8 mode (PEP 540) — works for PyInstaller bundles like yt-dlp.exe
     cmd.env("PYTHONUTF8", "1");
     cmd.env("PYTHONIOENCODING", "utf-8");
-    cmd.env("PYTHONLEGACYWINDOWSSTDIO", "utf-8");
     #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000);
+    {
+        // DETACHED_PROCESS (0x08) hides console AND keeps valid I/O handles for Python
+        // CREATE_NO_WINDOW (0x08000000) breaks Python's TextIOWrapper
+        cmd.creation_flags(0x00000008);
+    }
     cmd
 }
 
@@ -27,9 +29,10 @@ fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> tokio::process
     let mut cmd = tokio::process::Command::new(program);
     cmd.env("PYTHONUTF8", "1");
     cmd.env("PYTHONIOENCODING", "utf-8");
-    cmd.env("PYTHONLEGACYWINDOWSSTDIO", "utf-8");
     #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000);
+    {
+        cmd.creation_flags(0x00000008);
+    }
     cmd
 }
 
@@ -417,6 +420,9 @@ async fn run_download(
         "-o".to_string(),
         outtmpl,
         "--no-playlist".to_string(),
+        "--windows-filenames".to_string(),
+        "--encoding".to_string(),
+        "utf-8".to_string(),
         "--socket-timeout".to_string(),
         "30".to_string(),
         "--retries".to_string(),
