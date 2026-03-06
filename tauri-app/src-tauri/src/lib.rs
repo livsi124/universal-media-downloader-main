@@ -415,6 +415,10 @@ async fn run_download(
         "10".to_string(),
     ];
 
+    if let Some(ffmpeg) = get_ffmpeg_path(&app) {
+        args.extend(["--ffmpeg-location".to_string(), ffmpeg]);
+    }
+
     // Format / postprocessors
     let is_audio_only = format.starts_with("bestaudio");
     let is_video_only = format == "video_only_stripped";
@@ -467,7 +471,7 @@ async fn run_download(
     let mut child = create_tokio_command(&ytdlp)
         .args(&args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::null())
         .kill_on_drop(true)
         .spawn()
         .map_err(|e| e.to_string())?;
