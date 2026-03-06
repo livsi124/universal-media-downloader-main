@@ -37,6 +37,8 @@
             {{ updating ? '...' : t('update_now') }}
           </button>
         </div>
+      </div>
+
       <div class="settings-row">
         <span class="settings-label">Diagnostics</span>
         <button class="btn btn-secondary" style="font-size:12px; height:28px; padding:0 10px;" @click="showDiagnostics">Show Paths</button>
