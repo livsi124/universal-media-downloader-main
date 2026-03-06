@@ -468,18 +468,42 @@ async fn run_download(
 
     args.push(url.clone());
 
+    eprintln!("[UMD] Running: {} {}", &ytdlp, args.join(" "));
+
     let mut child = create_tokio_command(&ytdlp)
         .args(&args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            let msg = format!("Failed to start yt-dlp: {}", e);
+            eprintln!("[UMD] {}", msg);
+            msg
+        })?;
 
     use tokio::io::AsyncBufReadExt;
+
+    // Read stderr in a separate task to avoid deadlock
+    let stderr_handle = if let Some(stderr) = child.stderr.take() {
+        let handle = tokio::spawn(async move {
+            let mut reader = tokio::io::BufReader::new(stderr).lines();
+            let mut error_lines = Vec::new();
+            while let Ok(Some(line)) = reader.next_line().await {
+                eprintln!("[yt-dlp stderr] {}", line);
+                if !line.starts_with("WARNING:") {
+                    error_lines.push(line);
+                }
+            }
+            error_lines
+        });
+        Some(handle)
+    } else {
+        None
+    };
+
     if let Some(stdout) = child.stdout.take() {
         let mut reader = tokio::io::BufReader::new(stdout).lines();
-        let mut _final_path: Option<String> = None;
 
         while let Ok(Some(line)) = reader.next_line().await {
             // Parse yt-dlp progress lines like:
@@ -488,7 +512,6 @@ async fn run_download(
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if let Some(pct_str) = parts.iter().find(|p| p.ends_with('%')) {
                     if let Ok(pct) = pct_str.trim_end_matches('%').parse::<f64>() {
-                        // Scale to 0-90%
                         let scaled = pct * 0.9;
                         let speed = parts
                             .iter()
@@ -513,10 +536,8 @@ async fn run_download(
                 emit_progress("processing", 92.0, None, None, Some("Processing..."));
             } else if line.contains("Destination:") || line.contains("has already been downloaded")
             {
-                // Try to extract file path
                 if let Some(idx) = line.find("Destination:") {
-                    let path = line[idx + 12..].trim().to_string();
-                    _final_path = Some(path);
+                    let _path = line[idx + 12..].trim().to_string();
                 }
             }
         }
@@ -527,8 +548,25 @@ async fn run_download(
     if status.success() {
         emit_progress("completed", 100.0, None, None, None);
     } else {
-        // Read stderr for error
-        emit_progress("error", 0.0, None, None, Some("Download failed"));
+        // Collect stderr for error message
+        let error_msg = if let Some(handle) = stderr_handle {
+            match handle.await {
+                Ok(lines) if !lines.is_empty() => {
+                    let msg = lines.join("\n");
+                    // Truncate for UI display
+                    if msg.len() > 300 {
+                        format!("{}...", &msg[..300])
+                    } else {
+                        msg
+                    }
+                }
+                _ => "Download failed (unknown error)".to_string(),
+            }
+        } else {
+            "Download failed".to_string()
+        };
+        eprintln!("[UMD] Download failed: {}", error_msg);
+        emit_progress("error", 0.0, None, None, Some(&error_msg));
     }
 
     Ok(())
@@ -538,6 +576,34 @@ async fn run_download(
 async fn stop_download(_state: State<'_, AppState>, _task_id: String) -> Result<(), String> {
     // Signal to stop (for future implementation with process tracking)
     Ok(())
+}
+
+#[tauri::command]
+async fn debug_deps(app: AppHandle) -> Result<String, String> {
+    let mut info = String::new();
+
+    info.push_str(&format!("Resource dir: {:?}\n", app.path().resource_dir().ok()));
+
+    match get_ytdlp_path(&app) {
+        Some(p) => {
+            info.push_str(&format!("yt-dlp path: {}\n", p));
+            match create_command(&p).arg("--version").output() {
+                Ok(o) => info.push_str(&format!("yt-dlp version: {}\n", String::from_utf8_lossy(&o.stdout).trim())),
+                Err(e) => info.push_str(&format!("yt-dlp exec error: {}\n", e)),
+            }
+        }
+        None => info.push_str("yt-dlp: NOT FOUND\n"),
+    }
+
+    match get_ffmpeg_path(&app) {
+        Some(p) => info.push_str(&format!("ffmpeg path: {}\n", p)),
+        None => info.push_str("ffmpeg: NOT FOUND\n"),
+    }
+
+    info.push_str(&format!("Save path: {:?}\n", get_default_save_path(&app)));
+
+    eprintln!("[UMD DEBUG]\n{}", info);
+    Ok(info)
 }
 
 #[tauri::command]
@@ -883,6 +949,7 @@ pub fn run() {
             fetch_video_info,
             start_download,
             stop_download,
+            debug_deps,
             check_ytdlp,
             check_ffmpeg,
             update_ytdlp,

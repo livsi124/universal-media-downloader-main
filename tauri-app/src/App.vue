@@ -204,9 +204,18 @@ onMounted(async () => {
   await downloadStore.init()
   setLocale(settingsStore.settings.language)
 
+  // Debug: log dependency paths
+  try {
+    const deps = await invoke('debug_deps')
+    console.log('[UMD] Dependencies:\n' + deps)
+  } catch (e) {
+    console.error('[UMD] debug_deps error:', e)
+  }
+
   // Check yt-dlp on startup
   try {
-    await invoke('check_ytdlp')
+    const ver = await invoke('check_ytdlp')
+    console.log('[UMD] yt-dlp version:', ver)
   } catch (_) {
     notify('yt-dlp не найден. Установите его для работы приложения.', 'error', 8000)
   }
